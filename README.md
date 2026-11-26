@@ -16,7 +16,7 @@
 
 `astrbot_plugin_giftia_extool` 是专为 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 和 [Giftia (astrbot_plugin_giftia)](https://github.com/MatchaSweetPotato-Lab/astrbot_plugin_giftia) 打造的增强型工具扩展插件。
 
-通过注册标准的 LLM Tools（大模型函数调用），使大语言模型和拟人化 AI 伴侣具备主动探索与感知外部特征的能力。目前已内置**用户头像视觉感知与长期画像记忆同步**工具。
+通过注册标准的 LLM Tools（大模型函数调用），让大语言模型和拟人化 AI 伴侣在对话中搜索网页、查看用户头像并同步长期画像。
 
 ---
 
@@ -79,6 +79,30 @@ git clone https://github.com/MatchaSweetPotato-Lab/astrbot_plugin_giftia_extool.
 | ├─ `auto_sync_to_giftia` | `bool` | `true` | 是否自动将分析得到的头像描述同步写入 Giftia 用户画像库；关闭时暂停每日检查 |
 | └─ `daily_avatar_check_enabled` | `bool` | `false` | 每天北京时间 01:00 检查昨日活跃且已有画像的 QQ 用户，与头像查看工具开关独立 |
 
+### 网页搜索
+
+| `web_search_config` 配置项 | 默认值 | 说明 |
+| :--- | :---: | :--- |
+| `enabled` | `false` | 开启后注册所选供应商的工具 |
+| `provider` | `tavily` | 可选 SerpApi、DeepSeek Search API、Tavily、Baidu AI Search、Bocha、Brave、Firecrawl、Exa、AnySearch |
+| `api_key` | 空 | 填写所选供应商的 API 密钥。AnySearch 可留空使用匿名额度 |
+
+从本体的网页搜索迁移时，在插件里选择供应商、填写密钥并开启工具，再关闭原配置档的网页搜索开关。若人格使用工具白名单，请用下表中所选供应商的工具名更新原有条目。旧版 `giftia_web_search` 也按此方式迁移。
+
+| 供应商 | 注册的工具 |
+| :--- | :--- |
+| Tavily | `giftia_web_search_tavily`、`giftia_tavily_extract_web_page` |
+| Bocha | `giftia_web_search_bocha` |
+| Brave | `giftia_web_search_brave` |
+| Firecrawl | `giftia_web_search_firecrawl`、`giftia_firecrawl_extract_web_page` |
+| Baidu AI Search | `giftia_web_search_baidu` |
+| Exa | `giftia_web_search_exa`、`giftia_exa_get_contents` |
+| AnySearch | `giftia_web_search_anysearch` |
+| DeepSeek Search API | `giftia_web_search_deepseek`、`giftia_deepseek_fetch_web_page` |
+| SerpApi | `giftia_web_search_serpapi`、`giftia_news_search_serpapi`、`giftia_image_search_serpapi`、`giftia_finance_search_serpapi`、`giftia_scholar_search_serpapi` |
+
+各工具保留本体对应的调用参数。同一供应商的工具共用插件配置里的密钥，由插件直接请求 API。网页链接供模型读取正文或按需提供给用户，回复省去自动来源引用。
+
 ### 每日头像检查
 
 开启 `avatar_config.daily_avatar_check_enabled`，并保持 `auto_sync_to_giftia` 开启。检查任务复用 `caption_provider_ids`，未配置时使用 AstrBot 默认聊天模型，所选模型需要支持图片输入。
@@ -135,11 +159,13 @@ astrbot_plugin_giftia_extool/
 │   ├── avatar_monitor.py   # 昨日活跃用户筛选与每日头像维护
 │   ├── database.py         # 基于 aiosqlite 的本地缓存持久化
 │   ├── giftia_sync.py      # Giftia 插件实例检测与画像写入联动
-│   └── prompts.py          # 头像特征分析专用 Prompt 模板
+│   ├── prompts.py         # 头像特征分析专用 Prompt 模板
+│   └── web_search/        # 网页搜索、正文提取和专项搜索工具
 ├── tests/
 │   ├── test_avatar_fetcher.py # QQ 官方机器人头像下载兼容测试
 │   ├── test_avatar_tool.py # 头像工具测试
-│   └── test_avatar_monitor.py # 日期边界、变更检测与画像同步测试
+│   ├── test_avatar_monitor.py # 日期边界、变更检测与画像同步测试
+│   └── test_web_search.py # 搜索供应商与插件开关测试
 ├── _conf_schema.json       # 配置模式定义文件
 ├── main.py                 # 插件入口与 LLM Tool 注册
 ├── metadata.yaml           # 插件元数据
@@ -151,6 +177,8 @@ astrbot_plugin_giftia_extool/
 ## 📄 开源许可证
 
 本项目采用 [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE) 协议开源。
+
+网页搜索工具于 2026-11-26 根据 AstrBot 本体的搜索实现移植并修改，沿用 AGPL-3.0-or-later。
 
 ## 💡 鸣谢与支持
 

@@ -16,11 +16,13 @@ try:
     from .core.avatar_monitor import CHECK_TIMEZONE, check_active_avatars
     from .core.database import AvatarCacheDB
     from .core.giftia_sync import get_giftia_instance, sync_avatar_to_giftia
+    from .core.web_search import build_web_search_tools
 except ImportError:
     from core.avatar_fetcher import AvatarFetcher
     from core.avatar_monitor import CHECK_TIMEZONE, check_active_avatars
     from core.database import AvatarCacheDB
     from core.giftia_sync import get_giftia_instance, sync_avatar_to_giftia
+    from core.web_search import build_web_search_tools
 
 
 @register("giftia_extool", "e.e.", "支持 giftia 的更多 llm 工具", "1.0.0")
@@ -71,6 +73,17 @@ class GiftiaExTool(Star):
         else:
             self.context.deactivate_llm_tool("inspect_user_avatar")
             logger.info("[Giftia ExTool] Avatar tool disabled.")
+
+        search_conf = self.conf.get("web_search_config") or {}
+        if search_conf.get("enabled", False):
+            search_tools = build_web_search_tools(
+                provider=search_conf.get("provider", "tavily"),
+                api_key=search_conf.get("api_key") or "",
+            )
+            if search_tools:
+                self.context.add_llm_tools(*search_tools)
+            else:
+                logger.warning("[Giftia ExTool] Unknown web search provider.")
 
         if self._get_avatar_conf().get("daily_avatar_check_enabled", False):
             self._daily_task = asyncio.create_task(

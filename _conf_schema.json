@@ -30,5 +30,50 @@
         "hint": "每天北京时间 01:00 检查昨日发言且已有 Giftia 画像的 QQ 用户，补全缺失描述并更新变更头像。同一 Bot 内共享画像只写入一次。关闭自动写入 Giftia 时暂停检查；与头像查看工具开关独立。首次检查会为旧记录重新识图建立指纹。"
       }
     }
+  },
+  "web_search_config": {
+    "description": "网页搜索工具配置",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用网页搜索工具",
+        "type": "bool",
+        "default": false
+      },
+      "provider": {
+        "description": "网页搜索供应商",
+        "type": "string",
+        "default": "tavily",
+        "options": [
+          "serpapi",
+          "deepseek",
+          "tavily",
+          "baidu_ai_search",
+          "bocha",
+          "brave",
+          "firecrawl",
+          "exa",
+          "anysearch"
+        ],
+        "labels": [
+          "SerpApi",
+          "DeepSeek Search API",
+          "Tavily",
+          "Baidu AI Search",
+          "Bocha",
+          "Brave",
+          "Firecrawl",
+          "Exa",
+          "AnySearch"
+        ]
+      },
+      "api_key": {
+        "description": "网页搜索 API 密钥",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "填写所选供应商的 API 密钥。AnySearch 留空时使用其匿名额度。"
+      }
+    }
   }
 }
