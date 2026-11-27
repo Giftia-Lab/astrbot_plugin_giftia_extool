@@ -58,7 +58,6 @@ class BochaWebSearchTool(WebSearchTool):
             "POST",
             "https://api.bochaai.com/v1/web-search",
             headers={
-                "Authorization": f"Bearer {self.api_key}",
                 "Accept-Encoding": "gzip, deflate",
             },
             json=payload,

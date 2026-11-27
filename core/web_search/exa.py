@@ -92,7 +92,7 @@ class ExaWebSearchTool(WebSearchTool):
         data = await self.request_json(
             "POST",
             "https://api.exa.ai/search",
-            headers={"x-api-key": self.api_key},
+            key_headers={"x-api-key": ""},
             json=payload,
         )
         return format_web_results(
@@ -134,7 +134,7 @@ class ExaGetContentsTool(WebSearchTool):
         data = await self.request_json(
             "POST",
             "https://api.exa.ai/contents",
-            headers={"x-api-key": self.api_key},
+            key_headers={"x-api-key": ""},
             json={"ids": [url], "text": {"maxCharacters": max_characters}},
         )
         pages = [

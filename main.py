@@ -78,7 +78,7 @@ class GiftiaExTool(Star):
         if search_conf.get("enabled", False):
             search_tools = build_web_search_tools(
                 provider=search_conf.get("provider", "tavily"),
-                api_key=search_conf.get("api_key") or "",
+                api_keys=search_conf.get("api_keys", []),
             )
             if search_tools:
                 self.context.add_llm_tools(*search_tools)

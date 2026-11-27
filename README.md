@@ -85,7 +85,7 @@ git clone https://github.com/MatchaSweetPotato-Lab/astrbot_plugin_giftia_extool.
 | :--- | :---: | :--- |
 | `enabled` | `false` | 开启后注册所选供应商的工具 |
 | `provider` | `tavily` | 可选 SerpApi、DeepSeek Search API、Tavily、Baidu AI Search、Bocha、Brave、Firecrawl、Exa、AnySearch |
-| `api_key` | 空 | 填写所选供应商的 API 密钥。AnySearch 可留空使用匿名额度 |
+| `api_keys` | `[]` | 所选供应商的 API 密钥列表。AnySearch 可留空使用匿名额度 |
 
 从本体的网页搜索迁移时，在插件里选择供应商、填写密钥并开启工具，再关闭原配置档的网页搜索开关。若人格使用工具白名单，请用下表中所选供应商的工具名更新原有条目。旧版 `giftia_web_search` 也按此方式迁移。
 
@@ -101,7 +101,9 @@ git clone https://github.com/MatchaSweetPotato-Lab/astrbot_plugin_giftia_extool.
 | DeepSeek Search API | `giftia_web_search_deepseek`、`giftia_deepseek_fetch_web_page` |
 | SerpApi | `giftia_web_search_serpapi`、`giftia_news_search_serpapi`、`giftia_image_search_serpapi`、`giftia_finance_search_serpapi`、`giftia_scholar_search_serpapi` |
 
-各工具保留本体对应的调用参数。同一供应商的工具共用插件配置里的密钥，由插件直接请求 API。网页链接供模型读取正文或按需提供给用户，回复省去自动来源引用。
+各工具保留本体对应的调用参数。同一供应商的工具共用密钥列表，按填写顺序轮询。收到 HTTP 429 时，当前密钥按 `Retry-After` 冷却，缺少有效值时冷却 30 秒。该次调用最多换一把可用密钥重试，所有密钥都在冷却时立即返回限流提示。升级后，请在网页搜索 API 密钥列表中重新填写密钥。
+
+网页链接供模型读取正文或按需提供给用户，回复省去自动来源引用。
 
 ### 每日头像检查
 

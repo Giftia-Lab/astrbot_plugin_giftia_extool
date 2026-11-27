@@ -2,7 +2,7 @@
 
 from .anysearch import AnySearchWebSearchTool
 from .baidu import BaiduWebSearchTool
-from .base import WebSearchTool
+from .base import SearchKeyPool, WebSearchTool
 from .bocha import BochaWebSearchTool
 from .brave import BraveWebSearchTool
 from .deepseek import DeepSeekFetchWebPageTool, DeepSeekWebSearchTool
@@ -36,15 +36,22 @@ _TOOLS_BY_PROVIDER: dict[str, tuple[type[WebSearchTool], ...]] = {
 }
 
 
-def build_web_search_tools(provider: str, api_key: str) -> list[WebSearchTool]:
+def build_web_search_tools(provider: str, api_keys: list[str]) -> list[WebSearchTool]:
     """Build the tools for the plugin's selected provider.
 
     Args:
         provider: Provider selected in the plugin settings.
-        api_key: Credential shared by the selected provider's tools.
+        api_keys: Credentials shared by the selected provider's tools.
 
     Returns:
         Tool instances for the provider, or an empty list for an unknown provider.
     """
-    api_key = api_key.strip()
-    return [tool(api_key=api_key) for tool in _TOOLS_BY_PROVIDER.get(provider, ())]
+    keys = ()
+    if isinstance(api_keys, list):
+        keys = tuple(
+            dict.fromkeys(
+                key.strip() for key in api_keys if isinstance(key, str) and key.strip()
+            )
+        )
+    key_pool = SearchKeyPool(keys)
+    return [tool(key_pool=key_pool) for tool in _TOOLS_BY_PROVIDER.get(provider, ())]

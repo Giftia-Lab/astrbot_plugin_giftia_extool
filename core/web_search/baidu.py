@@ -52,11 +52,13 @@ class BaiduWebSearchTool(WebSearchTool):
         if sites:
             payload["search_filter"] = {"match": {"site": sites[:100]}}
 
-        auth = f"Bearer {self.api_key}"
         data = await self.request_json(
             "POST",
             "https://qianfan.baidubce.com/v2/ai_search/web_search",
-            headers={"Authorization": auth, "X-Appbuilder-Authorization": auth},
+            key_headers={
+                "Authorization": "Bearer ",
+                "X-Appbuilder-Authorization": "Bearer ",
+            },
             json=payload,
         )
         return format_web_results(

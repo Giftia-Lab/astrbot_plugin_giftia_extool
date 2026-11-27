@@ -67,12 +67,13 @@
           "AnySearch"
         ]
       },
-      "api_key": {
-        "description": "网页搜索 API 密钥",
-        "type": "string",
-        "default": "",
+      "api_keys": {
+        "description": "网页搜索 API 密钥列表",
+        "type": "list",
+        "items": {"type": "string"},
+        "default": [],
         "secret": true,
-        "hint": "填写所选供应商的 API 密钥。AnySearch 留空时使用其匿名额度。"
+        "hint": "填写所选供应商的 API 密钥，可添加多把轮询。AnySearch 留空时使用其匿名额度。"
       }
     }
   }

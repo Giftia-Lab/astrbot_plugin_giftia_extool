@@ -1,11 +1,11 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
-from core.web_search import build_web_search_tools
 
+from core.web_search import build_web_search_tools
 from main import GiftiaExTool
 
 API_KEY = "plugin-test-key"
@@ -17,8 +17,8 @@ PAGE_TEXT = "这段来自网页正文。"
 
 @pytest.fixture
 def search_http(monkeypatch):
-    response = MagicMock(status=200, json=AsyncMock())
-    session = MagicMock()
+    response = MagicMock(status=200, headers={}, json=AsyncMock())
+    session = MagicMock(timeout=aiohttp.ClientTimeout(total=300))
     session.request.return_value.__aenter__.return_value = response
     client = MagicMock()
     client.return_value.__aenter__.return_value = session
@@ -245,7 +245,7 @@ async def test_web_search_forwards_each_providers_parameters(
 ):
     session, response = search_http
     response.json.return_value = body
-    tool = build_web_search_tools(provider, f" {API_KEY} ")[0]
+    tool = build_web_search_tools(provider, [f" {API_KEY} "])[0]
     assert tool.parameters["required"] == ["query"]
     assert set(tool.parameters["properties"]) == {"query", *arguments}
 
@@ -324,7 +324,7 @@ async def test_extraction_tools_read_a_known_url(
 ):
     session, response = search_http
     response.json.return_value = body
-    tool = build_web_search_tools(provider, API_KEY)[1]
+    tool = build_web_search_tools(provider, [API_KEY])[1]
     assert tool.parameters["required"] == ["url"]
     assert set(tool.parameters["properties"]) == {"url", *arguments}
 
@@ -475,7 +475,7 @@ async def test_serpapi_specialized_search_uses_its_own_engine(
 ):
     session, response = search_http
     response.json.return_value = body
-    tools = {tool.name: tool for tool in build_web_search_tools("serpapi", API_KEY)}
+    tools = {tool.name: tool for tool in build_web_search_tools("serpapi", [API_KEY])}
     tool = tools[f"giftia_{tool_name}"]
     assert tool.parameters["required"] == ["query"]
     assert set(tool.parameters["properties"]) == {"query", *arguments}
@@ -511,7 +511,7 @@ async def test_tavily_news_honors_relative_date_filters(
         "core.web_search.tavily.date", MagicMock(today=lambda: date(2026, 11, 26))
     )
 
-    await build_web_search_tools("tavily", API_KEY)[0].call(
+    await build_web_search_tools("tavily", [API_KEY])[0].call(
         None, query=QUERY, topic="news", **arguments
     )
 
@@ -531,7 +531,7 @@ async def test_anysearch_retains_structured_results_in_anonymous_mode(search_htt
         "results": [{**RESULT, "publication": {"year": 2025}}]
     }
 
-    result = await build_web_search_tools("anysearch", "")[0].call(None, query=QUERY)
+    result = await build_web_search_tools("anysearch", [])[0].call(None, query=QUERY)
 
     assert json.loads(result) == {
         "results": [{**RESULT, "snippet": '摘要\npublication: {"year": 2025}'}]
@@ -542,10 +542,10 @@ async def test_anysearch_retains_structured_results_in_anonymous_mode(search_htt
 @pytest.mark.asyncio
 async def test_missing_key_or_required_argument_does_not_call_provider(search_http):
     session, _ = search_http
-    tool = build_web_search_tools("tavily", "")[0]
+    tool = build_web_search_tools("tavily", [])[0]
     assert "API 密钥" in await tool.call(None, query=QUERY)
 
-    fetch = build_web_search_tools("deepseek", API_KEY)[1]
+    fetch = build_web_search_tools("deepseek", [API_KEY])[1]
     assert "url must" in await fetch.call(None)
     assert "url must" in await fetch.call(None, url="file:///tmp/local.html")
     session.request.assert_not_called()
@@ -558,10 +558,103 @@ async def test_serpapi_transport_failure_does_not_expose_key(search_http):
         f"https://serpapi.com/search.json?api_key={API_KEY}"
     )
 
-    result = await build_web_search_tools("serpapi", API_KEY)[0].call(None, query=QUERY)
+    search = build_web_search_tools("serpapi", [API_KEY, "backup-test-key"])[0]
+    result = await search.call(None, query=QUERY)
 
     assert "请求失败" in result
     assert API_KEY not in result
+    session.request.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_search_and_extraction_share_round_robin_keys(search_http):
+    session, response = search_http
+    response.json.return_value = {"results": [{**RESULT, "raw_content": PAGE_TEXT}]}
+    second_key = "second-test-key"
+    search, extract = build_web_search_tools(
+        "tavily", [f" {API_KEY} ", "  ", second_key, API_KEY]
+    )
+
+    await search.call(None, query=QUERY)
+    await extract.call(None, url=PAGE)
+    await search.call(None, query=QUERY)
+
+    assert [
+        call.kwargs["headers"]["Authorization"]
+        for call in session.request.call_args_list
+    ] == [f"Bearer {API_KEY}", f"Bearer {second_key}", f"Bearer {API_KEY}"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("retry_after", "cooldown"),
+    [("8", 8), ("Fri, 27 Nov 2026 00:00:12 GMT", 12), ("invalid", 30)],
+)
+async def test_rate_limit_retries_with_new_key_and_observes_cooldown(
+    search_http, monkeypatch, retry_after, cooldown
+):
+    session, response = search_http
+    response.json.return_value = {"organic_results": []}
+    throttled = MagicMock(status=429, headers={"Retry-After": retry_after})
+    session.request.return_value.__aenter__.side_effect = [
+        throttled,
+        response,
+        response,
+        response,
+    ]
+    clock = MagicMock(return_value=100.0)
+    monkeypatch.setattr("core.web_search.base.monotonic", clock)
+    monkeypatch.setattr(
+        "core.web_search.base.datetime",
+        MagicMock(
+            now=MagicMock(return_value=datetime(2026, 11, 27, tzinfo=timezone.utc))
+        ),
+    )
+    backup_key = "backup-test-key"
+    search = build_web_search_tools("serpapi", [API_KEY, backup_key])[0]
+
+    result = await search.call(None, query=QUERY)
+    assert json.loads(result) == {"results": []}
+    clock.return_value += cooldown - 1
+    await search.call(None, query=QUERY)
+    clock.return_value += 1
+    await search.call(None, query=QUERY)
+
+    assert [call.kwargs["params"] for call in session.request.call_args_list] == [
+        {"q": QUERY, "engine": "google", "api_key": key}
+        for key in [API_KEY, backup_key, backup_key, API_KEY]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_retry_is_bounded_and_all_tools_skip_cooled_keys(search_http):
+    session, response = search_http
+    response.status = 429
+    search, extract = build_web_search_tools(
+        "tavily", [API_KEY, "key-two", "key-three"]
+    )
+
+    assert "限流" in await search.call(None, query=QUERY)
+    assert session.request.call_count == 2
+    assert "限流" in await extract.call(None, url=PAGE)
+    assert [
+        call.kwargs["headers"]["Authorization"]
+        for call in session.request.call_args_list
+    ] == [f"Bearer {API_KEY}", "Bearer key-two", "Bearer key-three"]
+
+    assert "限流" in await search.call(None, query=QUERY)
+    assert session.request.call_count == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [400, 401, 403, 500])
+async def test_other_http_errors_do_not_retry(search_http, status):
+    session, response = search_http
+    response.status = status
+    search = build_web_search_tools("tavily", [API_KEY, "backup-test-key"])[0]
+
+    assert f"HTTP {status}" in await search.call(None, query=QUERY)
+    session.request.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -598,7 +691,7 @@ async def test_plugin_registers_only_the_selected_providers_tools(
             "web_search_config": {
                 "enabled": enabled,
                 "provider": provider,
-                "api_key": API_KEY,
+                "api_keys": [API_KEY, "second-test-key"],
             }
         },
     )
@@ -609,7 +702,8 @@ async def test_plugin_registers_only_the_selected_providers_tools(
             context.add_llm_tools.assert_called_once()
             tools = context.add_llm_tools.call_args.args
             assert [tool.name for tool in tools] == expected_tools
-            assert all(tool.api_key == API_KEY for tool in tools)
+            assert tools[0].key_pool.keys == (API_KEY, "second-test-key")
+            assert all(tool.key_pool is tools[0].key_pool for tool in tools)
         else:
             context.add_llm_tools.assert_not_called()
         context.get_config.assert_not_called()

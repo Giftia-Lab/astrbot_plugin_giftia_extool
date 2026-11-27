@@ -31,7 +31,7 @@ class SerpApiTool(WebSearchTool):
         Raises:
             WebSearchError: If SerpApi reports a request or application error.
         """
-        params = {**payload, "engine": engine, "api_key": self.api_key}
+        params = {**payload, "engine": engine}
         if country:
             params["gl"] = country
         if search_lang:
@@ -39,7 +39,7 @@ class SerpApiTool(WebSearchTool):
         data = await self.request_json(
             "GET",
             "https://serpapi.com/search.json",
-            headers={},
+            key_in_query=True,
             params=params,
             timeout=aiohttp.ClientTimeout(total=60),
         )

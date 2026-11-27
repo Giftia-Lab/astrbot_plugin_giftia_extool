@@ -48,10 +48,8 @@ class BraveWebSearchTool(WebSearchTool):
         data = await self.request_json(
             "GET",
             "https://api.search.brave.com/res/v1/web/search",
-            headers={
-                "Accept": "application/json",
-                "X-Subscription-Token": self.api_key,
-            },
+            headers={"Accept": "application/json"},
+            key_headers={"X-Subscription-Token": ""},
             params=payload,
         )
         return format_web_results(
